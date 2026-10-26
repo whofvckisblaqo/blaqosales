@@ -11,11 +11,23 @@ export function parseReceiptInput(body) {
   const seen = new Set();
   const items = [];
   for (const raw of rawItems) {
-    if (!isValidId(raw.productId)) return { error: "Choose a product for every row." };
-    if (seen.has(String(raw.productId))) {
-      return { error: "The same product appears twice. Combine it into one row." };
+    let newProduct = null;
+    if (raw.newProduct) {
+      const name = String(raw.newProduct.name || "").trim().slice(0, 120);
+      if (!name) return { error: "Enter the name of the new product." };
+      newProduct = {
+        name,
+        brand: String(raw.newProduct.brand || "").trim().slice(0, 80),
+        category: String(raw.newProduct.category || "").trim().slice(0, 60) || "Perfume",
+        size: Math.max(0, Math.round(Number(raw.newProduct.size) || 0)),
+      };
+    } else {
+      if (!isValidId(raw.productId)) return { error: "Choose a product for every row." };
+      if (seen.has(String(raw.productId))) {
+        return { error: "The same product appears twice. Combine it into one row." };
+      }
+      seen.add(String(raw.productId));
     }
-    seen.add(String(raw.productId));
 
     const quantity = Number(raw.quantity);
     if (!Number.isInteger(quantity) || quantity < 1) return { error: "Quantity must be a whole number of 1 or more." };
@@ -23,7 +35,7 @@ export function parseReceiptInput(body) {
     const unitCost = Number(raw.unitCost);
     if (!Number.isFinite(unitCost) || unitCost < 0) return { error: "Enter a valid cost for every product." };
 
-    items.push({ productId: String(raw.productId), quantity, unitCost: round2(unitCost) });
+    items.push({ productId: newProduct ? null : String(raw.productId), newProduct, quantity, unitCost: round2(unitCost) });
   }
 
   const rawExpenses = Array.isArray(body.expenses) ? body.expenses : [];
@@ -38,6 +50,12 @@ export function parseReceiptInput(body) {
     const category = EXPENSE_CATEGORIES.includes(raw.category) ? raw.category : "Transport";
     const note = String(raw.note || "").trim().slice(0, 80);
     expenses.push({ category, name: note || category, amount: round2(amountRaw) });
+  }
+
+  // Transport/other costs are required on a delivery, unless you say there were none.
+  const noCosts = body.noCosts === true;
+  if (expenses.length === 0 && !noCosts) {
+    return { error: "Enter the transport or other cost of bringing these goods in, or tick that there was none." };
   }
 
   let date = body.date ? new Date(body.date) : new Date();

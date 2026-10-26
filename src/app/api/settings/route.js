@@ -28,6 +28,8 @@ export async function PUT(request) {
 
   const defaultDiscount = round2(body.defaultDiscount || 0);
   const largeExpenseThreshold = round2(body.largeExpenseThreshold || 0);
+  const lowStockThreshold = Math.floor(Number(body.lowStockThreshold ?? 3));
+  if (!(lowStockThreshold >= 0)) return fail("The low-stock alert must be 0 or more.");
   if (defaultDiscount < 0 || largeExpenseThreshold < 0) return fail("Amounts cannot be negative.");
 
   await connectDB();
@@ -50,6 +52,7 @@ export async function PUT(request) {
         allowNegativeStock: Boolean(body.allowNegativeStock),
         autoStockDeduction: body.autoStockDeduction !== false,
         largeExpenseThreshold,
+        lowStockThreshold,
       },
     },
     { new: true }

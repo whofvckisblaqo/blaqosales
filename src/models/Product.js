@@ -15,7 +15,6 @@ const ProductSchema = new mongoose.Schema(
     // Not used by the app: the selling price is entered on each sale.
     sellingPrice: { type: Number, default: 0, min: 0 },
     stock: { type: Number, default: 0 },
-    lowStockThreshold: { type: Number, default: 3, min: 0 },
     supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", default: null },
     isActive: { type: Boolean, default: true },
   },
@@ -28,7 +27,8 @@ ProductSchema.virtual("potentialProfit").get(function () {
 
 ProductSchema.virtual("stockStatus").get(function () {
   if (this.stock <= 0) return "out_of_stock";
-  if (this.stock <= this.lowStockThreshold) return "low_stock";
+  // The alert level lives in Settings; the products API passes it in.
+  if (this.stock <= (this.$locals?.lowStockAt ?? 3)) return "low_stock";
   return "in_stock";
 });
 

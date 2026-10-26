@@ -5,7 +5,7 @@ import StockMovement from "@/models/StockMovement";
 import Expense from "@/models/Expense";
 import Supplier from "@/models/Supplier";
 import { nextSequence } from "@/models/Counter";
-import { requireUser, unauthorized, fail } from "@/lib/api";
+import { requireUser, unauthorized, fail, escapeRegex } from "@/lib/api";
 import { allocateInboundCosts, blendedCost } from "@/lib/landedCost";
 import { parseReceiptInput } from "@/lib/receiptInput";
 
@@ -51,10 +51,28 @@ export async function POST(request) {
 
   await connectDB();
 
-  const products = await Product.find({ _id: { $in: input.items.map((i) => i.productId) }, isActive: true });
-  const productMap = new Map(products.map((p) => [String(p._id), p]));
+  const existingIds = input.items.filter((i) => i.productId).map((i) => i.productId);
+  const existing = await Product.find({ _id: { $in: existingIds }, isActive: true });
   for (const item of input.items) {
-    if (!productMap.has(item.productId)) return fail("One of the products no longer exists.", 404);
+    if (item.productId && !existing.some((p) => String(p._id) === item.productId)) {
+      return fail("One of the products no longer exists.", 404);
+    }
+  }
+
+  // New products typed on the Receive Stock page must not repeat one you already have.
+  const newItems = input.items.filter((i) => i.newProduct);
+  const newKeys = new Set();
+  for (const item of newItems) {
+    const { name, size } = item.newProduct;
+    const key = `${name.toLowerCase()}|${size}`;
+    if (newKeys.has(key)) return fail(`"${name}" is in this delivery twice. Combine it into one row.`);
+    newKeys.add(key);
+    const clash = await Product.findOne({
+      isActive: true,
+      size,
+      name: new RegExp(`^${escapeRegex(name)}$`, "i"),
+    });
+    if (clash) return fail(`"${clash.label}" already exists. Choose it from the list instead of adding it as new.`);
   }
 
   // Share the costs of bringing the goods in. Same function the page preview uses.
@@ -77,9 +95,24 @@ export async function POST(request) {
   const receiptNumber = `PUR-${String(seq).padStart(6, "0")}`;
 
   const applied = [];
+  const createdProducts = [];
   let receipt = null;
+  let productMap = new Map(existing.map((p) => [String(p._id), p]));
 
   try {
+    // Create the new products first (with no stock). The delivery below then stocks them like any other.
+    for (const item of newItems) {
+      const p = await Product.create({
+        ...item.newProduct,
+        costPrice: item.unitCost,
+        stock: 0,
+        supplier: supplier?._id || null,
+      });
+      createdProducts.push(p._id);
+      item.productId = String(p._id);
+      productMap.set(item.productId, p);
+    }
+
     const receiptItems = [];
 
     for (let idx = 0; idx < input.items.length; idx++) {
@@ -160,6 +193,12 @@ export async function POST(request) {
       ]);
     }
     await undoLines(applied);
+    if (createdProducts.length) {
+      await Promise.allSettled([
+        StockMovement.deleteMany({ product: { $in: createdProducts } }),
+        Product.deleteMany({ _id: { $in: createdProducts } }),
+      ]);
+    }
     console.error("Stock receipt failed and was rolled back:", err);
     return fail("The delivery could not be saved. Nothing was changed. Please try again.", 500);
   }

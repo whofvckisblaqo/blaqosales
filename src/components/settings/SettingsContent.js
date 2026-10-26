@@ -109,6 +109,9 @@ export default function SettingsContent() {
               </select>
             </Field>
             <Field label="Default discount (₦)" htmlFor="defaultDiscount" hint="Filled in on every new sale. Leave 0 for none."><input id="defaultDiscount" type="number" min="0" step="any" value={form.defaultDiscount} onChange={set("defaultDiscount")} className={inputClass} /></Field>
+            <Field label="Low-stock alert at" htmlFor="lowStockThreshold" hint="A product is marked low when its stock falls to this number or less. Applies to every product.">
+              <input id="lowStockThreshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={set("lowStockThreshold")} className={inputClass} />
+            </Field>
             <Field label="Large expense alert (₦)" htmlFor="largeExpenseThreshold" hint="You get a notification for expenses at or above this amount."><input id="largeExpenseThreshold" type="number" min="0" step="any" value={form.largeExpenseThreshold} onChange={set("largeExpenseThreshold")} className={inputClass} /></Field>
             <div className="space-y-3 sm:col-span-2">
               <Toggle id="autoStock" checked={form.autoStockDeduction} onChange={setVal("autoStockDeduction")} label="Take items out of stock automatically" hint="When off, selling does not change your stock numbers." />

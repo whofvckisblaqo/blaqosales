@@ -30,10 +30,10 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     sku: product?.sku || "",
     costPrice: product?.costPrice ?? "",
     stock: product?.stock ?? 0,
-    lowStockThreshold: product?.lowStockThreshold ?? 3,
     image: product?.image || "",
     description: product?.description || "",
     supplier: product?.supplier || "",
+    extraCost: "",
   });
   const [suppliers, setSuppliers] = useState([]);
   useEffect(() => {
@@ -141,9 +141,19 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
               <input id="stock" type="number" min="0" step="1" value={form.stock} onChange={set("stock")} className={inputClass} />
             </Field>
           )}
-          <Field label="Low-stock alert at" htmlFor="lowStockThreshold" hint="Warn me when stock falls to this number">
-            <input id="lowStockThreshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={set("lowStockThreshold")} className={inputClass} />
-          </Field>
+          {!isEdit && (
+            <Field
+              label="Transport / other costs (optional)"
+              htmlFor="extraCost"
+              hint={
+                Number(form.extraCost) > 0 && Number(form.stock) > 0
+                  ? `Shared across ${form.stock} items. Cost each becomes about ₦${(((Number(form.costPrice) || 0) + Number(form.extraCost) / Number(form.stock)) || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}.`
+                  : "Total you paid to bring this stock in. It is added to the cost price."
+              }
+            >
+              <input id="extraCost" type="number" min="0" step="any" value={form.extraCost} onChange={set("extraCost")} className={inputClass} />
+            </Field>
+          )}
           <Field label="Supplier (optional)" htmlFor="supplier">
             <select id="supplier" value={form.supplier} onChange={set("supplier")} className={inputClass}>
               <option value="">No supplier</option>

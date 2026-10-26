@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Trash2 } from "lucide-react";
 import { formatNaira } from "@/lib/money";
 import { allocateInboundCosts, blendedCost } from "@/lib/landedCost";
+import { PERFUME_SIZES } from "@/lib/perfumeSizes";
 
 const inputClass =
   "w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100";
@@ -12,7 +13,8 @@ const inputClass =
 const COST_CATEGORIES = ["Transport", "Delivery", "Packaging", "Supplier", "Miscellaneous"];
 
 let counter = 0;
-const newItem = () => ({ key: ++counter, productId: "", quantity: "1", unitCost: "" });
+const NEW = "__new__";
+const newItem = () => ({ key: ++counter, productId: "", quantity: "1", unitCost: "", newName: "", newBrand: "", newCategory: "Perfume", newSize: "" });
 const newCost = (category = "Transport") => ({ key: ++counter, category, amount: "", note: "" });
 
 function nowLocal() {
@@ -45,6 +47,7 @@ export default function ReceiveStockContent() {
   const [suppliers, setSuppliers] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [paidInFull, setPaidInFull] = useState(true);
+  const [noCosts, setNoCosts] = useState(false);
   const [paidAmount, setPaidAmount] = useState("");
 
   const [error, setError] = useState("");
@@ -79,6 +82,10 @@ export default function ReceiveStockContent() {
   }
 
   function pickProduct(key, productId) {
+    if (productId === NEW) {
+      updateItem(key, { productId: NEW, unitCost: "" });
+      return;
+    }
     const p = productById.get(productId);
     updateItem(key, { productId, unitCost: p ? String(p.costPrice) : "" });
   }
@@ -98,11 +105,16 @@ export default function ReceiveStockContent() {
   const owedToSupplier = Math.max(allocation.goodsTotal - amountPaid, 0);
   const paidTooMuch = amountPaid > allocation.goodsTotal;
 
-  const chosen = items.map((i) => i.productId).filter(Boolean);
+  const chosen = items.map((i) => i.productId).filter((id) => id && id !== NEW);
   const hasDuplicate = new Set(chosen).size !== chosen.length;
-  const incomplete = items.some((i) => !i.productId || !(Number(i.quantity) >= 1) || i.unitCost === "");
+  const incomplete = items.some(
+    (i) => !i.productId || (i.productId === NEW && !i.newName.trim()) || !(Number(i.quantity) >= 1) || i.unitCost === ""
+  );
+  const hasCost = costs.some((c) => Number(c.amount) > 0);
   const blocker = incomplete
     ? "Choose a product, quantity and cost for every row."
+    : !hasCost && !noCosts
+    ? "Enter the transport or other cost of bringing these goods in, or tick that there was none."
     : paidTooMuch
     ? "Amount paid cannot be more than the cost of the goods."
     : owedToSupplier > 0 && !supplierId
@@ -123,13 +135,18 @@ export default function ReceiveStockContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date: new Date(date).toISOString(),
-          items: items.map((i) => ({
-            productId: i.productId,
-            quantity: Number(i.quantity),
-            unitCost: Number(i.unitCost),
-          })),
+          items: items.map((i) =>
+            i.productId === NEW
+              ? {
+                  newProduct: { name: i.newName, brand: i.newBrand, category: i.newCategory, size: Number(i.newSize) || 0 },
+                  quantity: Number(i.quantity),
+                  unitCost: Number(i.unitCost),
+                }
+              : { productId: i.productId, quantity: Number(i.quantity), unitCost: Number(i.unitCost) }
+          ),
           expenses: costs.map((c) => ({ category: c.category, amount: Number(c.amount) || 0, note: c.note })),
           method,
+          noCosts: noCosts && !hasCost,
           note,
           supplierId: supplierId || null,
           amountPaid,
@@ -159,6 +176,7 @@ export default function ReceiveStockContent() {
     setNote("");
     setSupplierId("");
     setPaidInFull(true);
+    setNoCosts(false);
     setPaidAmount("");
     setError("");
     setProducts(null);
@@ -298,12 +316,32 @@ export default function ReceiveStockContent() {
                           <Field label="Product" htmlFor={`p-${r.key}`} hint={p ? `Currently ${p.stock} in stock at ${formatNaira(p.costPrice)} each` : undefined}>
                             <select id={`p-${r.key}`} value={r.productId} onChange={(e) => pickProduct(r.key, e.target.value)} className={inputClass}>
                               <option value="">Select a product</option>
+                              <option value={NEW}>+ New product (not registered yet)</option>
                               {products.map((prod) => (
                                 <option key={prod._id} value={prod._id}>{prod.label}</option>
                               ))}
                             </select>
                           </Field>
                         </div>
+                        {r.productId === NEW && (
+                          <>
+                            <Field label="New product name" htmlFor={`nn-${r.key}`}>
+                              <input id={`nn-${r.key}`} value={r.newName} onChange={(e) => updateItem(r.key, { newName: e.target.value })} className={inputClass} placeholder="e.g. Club de Nuit Intense Man" />
+                            </Field>
+                            <Field label="Brand (optional)" htmlFor={`nb-${r.key}`}>
+                              <input id={`nb-${r.key}`} value={r.newBrand} onChange={(e) => updateItem(r.key, { newBrand: e.target.value })} className={inputClass} />
+                            </Field>
+                            <Field label="Category" htmlFor={`nc-${r.key}`}>
+                              <input id={`nc-${r.key}`} value={r.newCategory} onChange={(e) => updateItem(r.key, { newCategory: e.target.value })} className={inputClass} />
+                            </Field>
+                            <Field label="Size (ml)" htmlFor={`ns-${r.key}`}>
+                              <select id={`ns-${r.key}`} value={r.newSize} onChange={(e) => updateItem(r.key, { newSize: e.target.value })} className={inputClass}>
+                                <option value="">No size</option>
+                                {PERFUME_SIZES.map((n) => <option key={n} value={String(n)}>{n} ml</option>)}
+                              </select>
+                            </Field>
+                          </>
+                        )}
                         <Field label="Quantity received" htmlFor={`q-${r.key}`}>
                           <input id={`q-${r.key}`} type="number" min="1" step="1" value={r.quantity} onChange={(e) => updateItem(r.key, { quantity: e.target.value })} className={inputClass} />
                         </Field>
@@ -325,7 +363,11 @@ export default function ReceiveStockContent() {
           {/* Costs */}
           <section className="rounded-2xl border border-gray-200 bg-white p-5">
             <h2 className="text-sm font-semibold text-gray-900">Costs of bringing them in</h2>
-            <p className="mb-4 mt-1 text-xs text-gray-500">Transport, loading, anything you paid for this whole delivery. Leave the amount empty if there is none.</p>
+            <p className="mb-4 mt-1 text-xs text-gray-500">Transport, loading, anything you paid for this whole delivery. Required, so every item gets its real cost.</p>
+            <label className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+              <input type="checkbox" checked={noCosts} onChange={(e) => setNoCosts(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-600" />
+              There was no transport or other cost for this delivery
+            </label>
 
             <div className="space-y-3">
               {costs.map((c) => (
@@ -382,6 +424,18 @@ export default function ReceiveStockContent() {
               {items.map((r, idx) => {
                 const p = productById.get(r.productId);
                 const line = allocation.lines[idx];
+                if (r.productId === NEW) {
+                  return (
+                    <div key={r.key} className="rounded-xl bg-gray-50 p-3 text-sm">
+                      <p className="font-medium text-gray-900">{r.newName.trim() || "New product"}{r.newSize ? ` ${r.newSize}ml` : ""} <span className="text-xs font-normal text-gray-400">(new)</span></p>
+                      <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+                        <div className="flex justify-between"><span>Supplier price</span><span>{formatNaira(line.unitCost)}</span></div>
+                        <div className="flex justify-between"><span>Share of costs (each)</span><span>{formatNaira(line.quantity > 0 ? line.share / line.quantity : 0)}</span></div>
+                        <div className="flex justify-between font-medium text-gray-900"><span>Cost price</span><span>{formatNaira(line.landedUnitCost)}</span></div>
+                      </div>
+                    </div>
+                  );
+                }
                 if (!p) return null;
                 const newAverage = blendedCost({
                   stock: p.stock,

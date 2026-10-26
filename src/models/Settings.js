@@ -22,6 +22,8 @@ const SettingsSchema = new mongoose.Schema(
     // Set once, when all your products are loaded and you start using the app for real.
     startedAt: { type: Date, default: null },
     startingStockValue: { type: Number, default: 0 },
+    // Products at or below this many items are "low stock".
+    lowStockThreshold: { type: Number, default: 3, min: 0 },
     // Expenses at or above this amount show up as a notification.
     largeExpenseThreshold: { type: Number, default: 50000, min: 0 },
   },

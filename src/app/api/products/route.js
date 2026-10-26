@@ -3,6 +3,7 @@ import Product from "@/models/Product";
 import StockMovement from "@/models/StockMovement";
 import { requireUser, unauthorized, fail, escapeRegex } from "@/lib/api";
 import { parseProductInput } from "@/lib/productInput";
+import { getSettings } from "@/models/Settings";
 
 export async function GET(request) {
   if (!(await requireUser())) return unauthorized();
@@ -11,6 +12,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") || "").trim();
   const status = searchParams.get("status") || "all";
+  const lowAt = (await getSettings()).lowStockThreshold;
 
   const query = { isActive: true };
 
@@ -22,13 +24,14 @@ export async function GET(request) {
   if (status === "out_of_stock") query.stock = { $lte: 0 };
   if (status === "low_stock") {
     query.stock = { $gt: 0 };
-    query.$expr = { $lte: ["$stock", "$lowStockThreshold"] };
+    query.$expr = { $lte: ["$stock", lowAt] };
   }
   if (status === "in_stock") {
-    query.$expr = { $gt: ["$stock", "$lowStockThreshold"] };
+    query.$expr = { $gt: ["$stock", lowAt] };
   }
 
   const products = await Product.find(query).sort({ createdAt: -1 });
+  for (const p of products) p.$locals.lowStockAt = lowAt;
   return Response.json({ products });
 }
 

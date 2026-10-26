@@ -18,7 +18,7 @@ export async function buildNotifications() {
 
   const [outOfStock, lowStock, owing, overdue, bigExpenses, suppliers, month] = await Promise.all([
     Product.find({ isActive: true, stock: { $lte: 0 } }).select("name size stock").limit(50),
-    Product.find({ isActive: true, stock: { $gt: 0 }, $expr: { $lte: ["$stock", "$lowStockThreshold"] } }).select("name size stock lowStockThreshold").limit(50),
+    Product.find({ isActive: true, stock: { $gt: 0 }, $expr: { $lte: ["$stock", settings.lowStockThreshold] } }).select("name size stock").limit(50),
     Sale.aggregate([{ $match: { balance: { $gt: 0 } } }, { $group: { _id: null, total: { $sum: "$balance" }, count: { $sum: 1 } } }]),
     Sale.find({ balance: { $gt: 0 }, dueDate: { $lt: now } }).sort({ dueDate: 1 }).limit(20),
     settings.largeExpenseThreshold > 0
@@ -32,7 +32,7 @@ export async function buildNotifications() {
     items.push({ id: `oos-${p._id}`, level: "danger", title: `${p.label} is out of stock`, text: "Receive more stock before you can sell it.", href: "/products/receive" });
   }
   for (const p of lowStock) {
-    items.push({ id: `low-${p._id}`, level: "warning", title: `${p.label} is running low`, text: `Only ${p.stock} left (alert at ${p.lowStockThreshold}).`, href: "/products/receive" });
+    items.push({ id: `low-${p._id}`, level: "warning", title: `${p.label} is running low`, text: `Only ${p.stock} left (alert at ${settings.lowStockThreshold}).`, href: "/products/receive" });
   }
   for (const s of overdue) {
     items.push({ id: `od-${s._id}`, level: "danger", title: `${s.customerName} is overdue`, text: `${s.orderNumber}: ${formatNaira(s.balance)} was due ${formatDate(s.dueDate)}.`, href: "/customers" });

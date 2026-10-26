@@ -10,7 +10,6 @@ export function parseProductInput(body, { isCreate = false } = {}) {
   if (!(Number(body.costPrice) >= 0)) return { error: "Enter a valid cost price." };
 
   const size = Math.max(0, Math.round(Number(body.size) || 0));
-  const lowStockThreshold = Math.max(0, Math.floor(Number(body.lowStockThreshold ?? 3)) || 0);
 
   const data = {
     name,
@@ -21,7 +20,6 @@ export function parseProductInput(body, { isCreate = false } = {}) {
     image: String(body.image || "").trim(),
     size,
     costPrice,
-    lowStockThreshold,
     supplier: isValidId(body.supplier) ? String(body.supplier) : null,
   };
 
@@ -29,6 +27,15 @@ export function parseProductInput(body, { isCreate = false } = {}) {
     const stock = Math.floor(Number(body.stock ?? 0));
     if (!Number.isFinite(stock) || stock < 0) return { error: "Stock must be 0 or more." };
     data.stock = stock;
+
+    // Optional transport or other costs for this opening stock. They are shared across
+    // the items and added to the cost price, so profit is worked out on what it really cost you.
+    const extra = round2(body.extraCost || 0);
+    if (!(extra >= 0)) return { error: "Extra costs must be 0 or more." };
+    if (extra > 0) {
+      if (stock < 1) return { error: "Enter the opening stock first, so the extra costs can be shared across the items." };
+      data.costPrice = round2(costPrice + extra / stock);
+    }
   }
 
   return { data };
