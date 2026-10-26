@@ -8,6 +8,8 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const loggedIn = !!auth?.user;
       const onLogin = nextUrl.pathname.startsWith("/login");
+      // First-time setup page. It locks itself as soon as an account exists.
+      if (nextUrl.pathname.startsWith("/setup") || nextUrl.pathname.startsWith("/api/setup")) return true;
 
       if (onLogin) {
         if (loggedIn) return Response.redirect(new URL("/dashboard", nextUrl));
