@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
+  // These read their own font/data files from disk, so they must not be bundled.
+  serverExternalPackages: ["pdfkit", "exceljs"],
 };
 
 export default nextConfig;
